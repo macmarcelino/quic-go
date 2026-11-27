@@ -109,6 +109,8 @@ func populateConfig(config *Config) *Config {
 		maxIncomingUniStreams = 0
 	}
 	return &Config{
+		GenerateInitialDestinationConnectionID: config.GenerateInitialDestinationConnectionID,
+
 		GetConfigForClient:               config.GetConfigForClient,
 		Versions:                         versions,
 		HandshakeIdleTimeout:             handshakeIdleTimeout,

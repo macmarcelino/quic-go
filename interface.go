@@ -110,6 +110,14 @@ type Config struct {
 	// The QUIC versions that can be negotiated.
 	// If not set, it uses all versions available.
 	Versions []Version
+	// GenerateInitialDestinationConnectionID generates the DCID for the client's
+	// first Initial packet. If nil, quic-go generates a random DCID.
+	// It must return a fresh, unpredictable connection ID of 8 to 20 bytes.
+	// It is called again if Version Negotiation starts a new connection attempt,
+	// but not for retransmissions or in response to a Retry packet.
+	// It may be called concurrently by separate dials. Errors abort the dial.
+	// This callback is only used by clients.
+	GenerateInitialDestinationConnectionID func() (ConnectionID, error)
 	// HandshakeIdleTimeout is the idle timeout before completion of the handshake.
 	// If we don't receive any packet from the peer within this time, the connection attempt is aborted.
 	// Additionally, if the handshake doesn't complete in twice this time, the connection attempt is also aborted.
