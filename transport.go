@@ -293,9 +293,16 @@ func (t *Transport) doDial(
 	if err != nil {
 		return nil, err
 	}
-	destConnID, err := generateConnectionIDForInitial()
+	generateInitialDCID := config.GenerateInitialDestinationConnectionID
+	if generateInitialDCID == nil {
+		generateInitialDCID = protocol.GenerateConnectionIDForInitial
+	}
+	destConnID, err := generateInitialDCID()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("generating initial destination connection ID: %w", err)
+	}
+	if destConnID.Len() < protocol.MinConnectionIDLenInitial {
+		return nil, fmt.Errorf("initial destination connection ID is %d bytes, want at least %d", destConnID.Len(), protocol.MinConnectionIDLenInitial)
 	}
 
 	t.mutex.Lock()

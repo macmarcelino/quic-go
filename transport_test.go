@@ -631,6 +631,26 @@ func testTransportDial(t *testing.T, early bool) {
 	})
 }
 
+func TestTransportDialingInvalidInitialDestinationConnectionID(t *testing.T) {
+	tr := &Transport{Conn: newUDPConnLocalhost(t)}
+	defer tr.Close()
+	addr := tr.Conn.LocalAddr()
+
+	_, err := tr.Dial(context.Background(), addr, &tls.Config{}, &Config{
+		GenerateInitialDestinationConnectionID: func() (ConnectionID, error) {
+			return ConnectionID{}, assert.AnError
+		},
+	})
+	require.ErrorIs(t, err, assert.AnError)
+
+	_, err = tr.Dial(context.Background(), addr, &tls.Config{}, &Config{
+		GenerateInitialDestinationConnectionID: func() (ConnectionID, error) {
+			return ConnectionIDFromBytes(make([]byte, 7)), nil
+		},
+	})
+	require.ErrorContains(t, err, "initial destination connection ID is 7 bytes")
+}
+
 func TestTransportDialingVersionNegotiation(t *testing.T) {
 	originalClientConnConstructor := newClientConnection
 	t.Cleanup(func() { newClientConnection = originalClientConnConstructor })
@@ -645,6 +665,7 @@ func TestTransportDialingVersionNegotiation(t *testing.T) {
 	}
 
 	type connParams struct {
+		dcid                 protocol.ConnectionID
 		pn                   protocol.PacketNumber
 		hasNegotiatedVersion bool
 		version              protocol.Version
@@ -656,7 +677,7 @@ func TestTransportDialingVersionNegotiation(t *testing.T) {
 		_ context.Context,
 		_ sendConn,
 		_ connRunner,
-		_ protocol.ConnectionID,
+		dcid protocol.ConnectionID,
 		_ protocol.ConnectionID,
 		_ ConnectionIDGenerator,
 		_ *statelessResetter,
@@ -669,7 +690,7 @@ func TestTransportDialingVersionNegotiation(t *testing.T) {
 		_ utils.Logger,
 		v protocol.Version,
 	) *wrappedConn {
-		connChan <- connParams{pn: pn, hasNegotiatedVersion: hasNegotiatedVersion, version: v}
+		connChan <- connParams{dcid: dcid, pn: pn, hasNegotiatedVersion: hasNegotiatedVersion, version: v}
 		if counter == 0 {
 			counter++
 			return &wrappedConn{testHooks: conn}
@@ -681,11 +702,21 @@ func TestTransportDialingVersionNegotiation(t *testing.T) {
 	tr.init(true)
 	defer tr.Close()
 
-	_, err := tr.Dial(context.Background(), nil, &tls.Config{}, nil)
+	firstDCID := ConnectionIDFromBytes([]byte("first ID"))
+	secondDCID := ConnectionIDFromBytes([]byte("second ID"))
+	dcids := []ConnectionID{firstDCID, secondDCID}
+	_, err := tr.Dial(context.Background(), nil, &tls.Config{}, &Config{
+		GenerateInitialDestinationConnectionID: func() (ConnectionID, error) {
+			id := dcids[0]
+			dcids = dcids[1:]
+			return id, nil
+		},
+	})
 	require.ErrorIs(t, err, assert.AnError)
 
 	select {
 	case params := <-connChan:
+		require.Equal(t, firstDCID, params.dcid)
 		require.Zero(t, params.pn)
 		require.False(t, params.hasNegotiatedVersion)
 		require.Equal(t, protocol.Version1, params.version)
@@ -694,6 +725,7 @@ func TestTransportDialingVersionNegotiation(t *testing.T) {
 	}
 	select {
 	case params := <-connChan:
+		require.Equal(t, secondDCID, params.dcid)
 		require.Equal(t, protocol.PacketNumber(109), params.pn)
 		require.True(t, params.hasNegotiatedVersion)
 		require.Equal(t, protocol.Version(789), params.version)

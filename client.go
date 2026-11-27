@@ -5,12 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
-
-	"github.com/quic-go/quic-go/internal/protocol"
 )
-
-// make it possible to mock connection ID for initial generation in the tests
-var generateConnectionIDForInitial = protocol.GenerateConnectionIDForInitial
 
 // DialAddr establishes a new QUIC connection to a server.
 // It resolves the address, and then creates a new UDP connection to dial the QUIC server.

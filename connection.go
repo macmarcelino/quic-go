@@ -139,7 +139,7 @@ type Conn struct {
 	// Destination connection ID used during the handshake.
 	// Used to check source connection ID on incoming packets.
 	handshakeDestConnID protocol.ConnectionID
-	// Set for the client. Destination connection ID used on the first Initial sent.
+	// Destination connection ID used on the first Initial sent by the client.
 	origDestConnID protocol.ConnectionID
 	retrySrcConnID protocol.ConnectionID // only set for the client (and if a Retry was performed)
 
@@ -285,6 +285,7 @@ var newConnection = func(
 		ctxCancel:           ctxCancel,
 		conn:                conn,
 		config:              conf,
+		origDestConnID:      origDestConnID,
 		handshakeDestConnID: destConnID,
 		srcConnIDLen:        srcConnID.Len(),
 		tokenGenerator:      tokenGenerator,
@@ -764,6 +765,10 @@ func (c *Conn) earlyConnReady() <-chan struct{} {
 func (c *Conn) Context() context.Context {
 	return c.ctx
 }
+
+// OriginalDestinationConnectionID returns the DCID used on the client's first
+// Initial packet for this connection, before any Retry or server-issued CID.
+func (c *Conn) OriginalDestinationConnectionID() ConnectionID { return c.origDestConnID }
 
 // ConnectionState returns basic details about the QUIC connection.
 func (c *Conn) ConnectionState() ConnectionState {
